@@ -8,7 +8,9 @@ from numpy.random import multivariate_normal
 from scipy.spatial.distance import cdist
 from scipy.interpolate import interp1d
 
-import pyaneti as pti
+#import pyaneti as pti
+from pytransit import QuadraticModel
+
 
 class light_curve:
     """
@@ -39,33 +41,32 @@ class light_curve:
         return "This is a light curve created by the goddess Citlalicue"
 
 
-    def add_transits(self,planet_parameters):
+    def add_transits(self,planet_parameters,planet_name='b'):
 
         self.params = planet_parameters
         self.transits = True
 
-        if not hasattr(self,'flux_transits'):
+        if not hasattr(self,'flux_transits'+planet_name):
 
-            nplanets = len(self.params[0])
             t0 = self.params[0] #mid-transit time
             p  = self.params[1] #orbital period
-            e  = [0.0]*nplanets
-            w  = [np.pi/2]*nplanets
             b  = self.params[2] #impact parameter
-            rho= self.params[3] #stellar density
+            a  = self.params[3] #stellar density
             rp = self.params[4] #scaled radius
             ldc= [self.params[5],self.params[6]] #LDC
 
-            #Get the scaled semi-major axis from the stellar density
-            a  = pti.rhotoa(rho,p)
-            #estimate the inclination
-            i  = pti.btoi(b,a,e,w)
-            pars = [t0,p,e,w,i,a]
-            #Assuming there is no integration
-            #That is true for PLATO lc
-            self.flux_transits = pti.flux_tr(self.time,[0]*len(self.time),pars,rp,ldc,1,1,1)
+            #Get the inclination angle from the impact parameter
+            inc = np.arccos(b/a)
 
-        self.flux = self.flux * self.flux_transits
+            #Let us use PyTransit to compute the transits
+            tm = QuadraticModel()
+            tm.set_data(self.time)
+            flux = tm.evaluate(k=rp, ldc=ldc, t0=t0, p=p, a=a, i=inc)
+            #Set attribute to the class
+            setattr(self,'flux_transits'+planet_name,flux)
+
+            #self.flux = self.flux * self.flux_transits
+            self.flux = self.flux * getattr(self,'flux_transits'+planet_name)
 
 
     def remove_transits(self):
