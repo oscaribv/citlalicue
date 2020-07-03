@@ -20,5 +20,13 @@ Dependencies:
 * [PyTransit](https://github.com/hpparvi/PyTransit)
 
 
-An example of how to use Citlalicue to create light curves can be found in 
+### Try it now!
+
+Install it by typing
+
+```
+pip install citlalicue
+```
+
+and check the example of how to use Citlalicue to create light curves in the link
 [example_light_curves.ipynb](https://github.com/oscaribv/citlalicue/blob/master/example_light_curves.ipynb).
