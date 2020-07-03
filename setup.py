@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="citlalicue",
-    version="0.0.1",
+    version="0.0.5",
     author="Oscar Barragán",
     author_email="oscaribv@gmail.com",
     description="Create stellar light curves!",
