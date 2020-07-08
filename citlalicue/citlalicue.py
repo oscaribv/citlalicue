@@ -55,7 +55,7 @@ class light_curve:
             inc = np.arccos(b/a)
 
             #Let us use PyTransit to compute the transits
-            tm = QuadraticModel()
+            tm = QuadraticModel(interpolate=False)
             tm.set_data(self.time)
             flux = tm.evaluate(k=rp, ldc=ldc, t0=t0, p=p, a=a, i=inc)
             #Set attribute to the class
