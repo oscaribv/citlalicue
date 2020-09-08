@@ -8,32 +8,13 @@ from citlalicue.citlalicue import light_curve
 #import QuadraticModel from pytransit
 from pytransit import QuadraticModel
 
-#p has to be a vector that contains the planet parameters + the hyper parameters
-#def neg_ln_like(p,t,f,npl):
-def neg_ln_like(p):
-    #The first 5*npl elements will be planet parameters
-    #The 5*npl + 1 and + 2 will be LDC
-    #The last elements will be hyperparameters
-#    f_local = f - transits(t,p[0:5*npl],p[5*npl:5*npl+2],npl)
-    gp.set_parameter_vector(p)
-    return -gp.log_likelihood(f_true)
-
-#p has to be a vector that contains the planet parameters + the hyper parameters
-#def grad_neg_ln_like(p,t,f,npl):
-def grad_neg_ln_like(p):
-    #The first 5*npl elements will be planet parameters
-    #The 5*npl + 1 and + 2 will be LDC
-    #The last elements will be hyperparameters
-#    f_local = f - transits(t,p[0:5*npl],p[5*npl:5*npl+2],npl)
-    gp.set_parameter_vector(p)
-    return -gp.grad_log_likelihood(f_true)
 
 class detrend():
     """
     Ths class detrends light curves using GPs
     """
 
-    def __init__(self,fname,bin=5):
+    def __init__(self,fname,bin=10):
         """Load the light curve to be detrended
         Bin the data the speed up computations
         The bin variables are used to speed up computation of the GP
@@ -67,15 +48,16 @@ class detrend():
         flux_bin = 1
         for i in range(npl):
             flux     = flux     * tm.evaluate(t0=pars[0+5*i], p=pars[1+5*i], a=pars[2+5*i], i=pars[3+5*i],k=pars[4+5*i], ldc=ldc)
-            flux_bin = flux_bin * tm.evaluate(t0=pars[0+5*i], p=pars[1+5*i], a=pars[2+5*i], i=pars[3+5*i],k=pars[4+5*i], ldc=ldc)
+            flux_bin = flux_bin * tm_bin.evaluate(t0=pars[0+5*i], p=pars[1+5*i], a=pars[2+5*i], i=pars[3+5*i],k=pars[4+5*i], ldc=ldc)
 
         self.flux_data_planet = flux
         self.flux_bin_planet = flux_bin
         self.flux_no_planet = self.flux_data / flux
-        self.flux_no_planet_bin = self.flux_data_bin / flux_bin
+        self.flux_no_planet_bin = self.flux_bin / flux_bin
 
 
     def create_gp(self,Kernel="Exp"):
+        import george
         from george import kernels
         if Kernel == "Matern32":
             kernel = 0.1 * kernels.Matern32Kernel(10.)
@@ -96,14 +78,35 @@ class detrend():
         plt.show()
 
     def predict(self):
-        self.pred, self.pred_var = gp.predict(self.flux_no_planet_bin, self.time_bin, return_var=True)
-        plt.plot(self.time_bin,self.flux_bin)
-        plt.plot(self.time_bin,self.pred)
+        self.pred, self.pred_var = self.gp.predict(self.flux_no_planet_bin, self.time_bin, return_var=True)
+        plt.plot(self.time_bin,self.flux_bin,'ko',alpha=0.25)
+        plt.plot(self.time_bin,self.pred,'r')
         plt.show()
+
+
+    #p has to be a vector that contains the planet parameters + the hyper parameters
+    #def neg_ln_like(p,t,f,npl):
+    def neg_ln_like(self,p):
+      #The first 5*npl elements will be planet parameters
+     #The 5*npl + 1 and + 2 will be LDC
+     #The last elements will be hyperparameters
+        #    f_local = f - transits(t,p[0:5*npl],p[5*npl:5*npl+2],npl)
+        self.gp.set_parameter_vector(p)
+        return -self.gp.log_likelihood(self.flux_no_planet_bin)
+
+    #p has to be a vector that contains the planet parameters + the hyper parameters
+    #def grad_neg_ln_like(p,t,f,npl):
+    def grad_neg_ln_like(p):
+        #The first 5*npl elements will be planet parameters
+        #The 5*npl + 1 and + 2 will be LDC
+        #The last elements will be hyperparameters
+    #    f_local = f - transits(t,p[0:5*npl],p[5*npl:5*npl+2],npl)
+        self.gp.set_parameter_vector(p)
+        return -self.gp.grad_log_likelihood(self.flux_no_planet_bin)
 
     def optimize(self):
         from scipy.optimize import minimize
-        self.result = minimize(neg_ln_like,gp.get_parameter_vector(),jac=grad_neg_ln_like)
+        self.result = minimize(self.neg_ln_like,self.gp.get_parameter_vector())
 
     def detrend(self):
         """detrend the original data set"""
@@ -132,8 +135,8 @@ class detrend():
 
         indices = tr[0]
         if nplanets > 0:
-        for o in range(1,nplanets):
-            indices = np.logical_or(indices,tr[o])
+            for o in range(1,nplanets):
+                indices = np.logical_or(indices,tr[o])
 
     def __str__(self):
         return "This is a light curve"
