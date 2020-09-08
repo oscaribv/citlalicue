@@ -16,7 +16,8 @@ setuptools.setup(
      install_requires = ["numpy",
     "matplotlib",
     "scipy",
-    "pytransit"],
+    "pytransit",
+    "george"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
