@@ -4,7 +4,7 @@ from numpy.random import multivariate_normal
 from scipy.spatial.distance import cdist
 from scipy.interpolate import interp1d
 
-#import pyaneti as pti
+#import QuadraticModel from pytransit
 from pytransit import QuadraticModel
 
 
