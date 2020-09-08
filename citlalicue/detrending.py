@@ -14,22 +14,34 @@ class detrend():
     Ths class detrends light curves using GPs
     """
 
-    def __init__(self,fname,bin=10):
+    def __init__(self,fname,bin=10,err=0):
         """Load the light curve to be detrended
-        Bin the data the speed up computations
         The bin variables are used to speed up computation of the GP
         """
 
-        self.time_data, self.flux_data, self.ferr_data = np.loadtxt(fname,unpack=True)
+        self.fname = fname
 
-        self.time_bin = self.time_data[::bin]
-        self.flux_bin = self.flux_data[::bin]
-        self.ferr_bin = self.ferr_data[::bin]
+        if err == 0:
+            self.time, self.flux, self.ferr = np.loadtxt(fname,unpack=True)
+        else:
+            self.time, self.flux = np.loadtxt(fname,unpack=True)
+            self.ferr = np.array([err]*len(self.time))
+
+        self.time_bin = self.time[::bin]
+        self.flux_bin = self.flux[::bin]
+        self.ferr_bin = self.ferr[::bin]
+
+        #Initialise the planet-related fluxes
+        self.nplanets = 1
+        self.flux_planet = np.ones(len(self.time))
+        self.flux_planet_bin = np.ones(len(self.time_bin))
+        self.flux_no_planet = self.flux
+        self.flux_no_planet_bin = self.flux_bin
 
     def add_transits(self,pars,ldc):
         """
-        Create planet model
-        pars -> T0, P, a/R*,
+        Add transits, so they can be removed from the detrending routines
+        pars -> [T0, P, a/R*, inclination, Rp/R*] x Number of planets
         ldc  -> u1, u2
         """
 
@@ -39,9 +51,10 @@ class detrend():
 
         #number of planets to be added
         npl = int(len(pars)/5)
+        self.nplanets = npl
         #We compute the model with
         tm = QuadraticModel()
-        tm.set_data(self.time_data)
+        tm.set_data(self.time)
         tm_bin = QuadraticModel()
         tm_bin.set_data(self.time_bin)
         flux = 1
@@ -50,19 +63,19 @@ class detrend():
             flux     = flux     * tm.evaluate(t0=pars[0+5*i], p=pars[1+5*i], a=pars[2+5*i], i=pars[3+5*i],k=pars[4+5*i], ldc=ldc)
             flux_bin = flux_bin * tm_bin.evaluate(t0=pars[0+5*i], p=pars[1+5*i], a=pars[2+5*i], i=pars[3+5*i],k=pars[4+5*i], ldc=ldc)
 
-        self.flux_data_planet = flux
-        self.flux_bin_planet = flux_bin
-        self.flux_no_planet = self.flux_data / flux
+        self.flux_planet = flux
+        self.flux_planet_bin = flux_bin
+        self.flux_no_planet = self.flux / flux
         self.flux_no_planet_bin = self.flux_bin / flux_bin
 
 
-    def create_gp(self,Kernel="Exp"):
+    def gp(self,Kernel="Exp"):
         import george
         from george import kernels
         if Kernel == "Matern32":
             kernel = 0.1 * kernels.Matern32Kernel(10.)
-        elif Kernel == "Matern32":
-            kernel = 0.1*kernels.Matern32Kernel(10.)
+        elif Kernel == "Matern52":
+            kernel = 0.1*kernels.Matern52Kernel(10.)
         elif Kernel == "Exp":
             kernel = 0.1*kernels.ExpKernel(10.)
 
@@ -78,9 +91,10 @@ class detrend():
         plt.show()
 
     def predict(self):
-        self.pred, self.pred_var = self.gp.predict(self.flux_no_planet_bin, self.time_bin, return_var=True)
+        pred, pred_var = self.gp.predict(self.flux_no_planet_bin, self.time_bin, return_var=True)
+        plt.figure(figsize=(15,5))
         plt.plot(self.time_bin,self.flux_bin,'ko',alpha=0.25)
-        plt.plot(self.time_bin,self.pred,'r')
+        plt.plot(self.time_bin,pred,'r')
         plt.show()
 
 
@@ -96,13 +110,13 @@ class detrend():
 
     #p has to be a vector that contains the planet parameters + the hyper parameters
     #def grad_neg_ln_like(p,t,f,npl):
-    def grad_neg_ln_like(p):
+    #def grad_neg_ln_like(p):
         #The first 5*npl elements will be planet parameters
         #The 5*npl + 1 and + 2 will be LDC
         #The last elements will be hyperparameters
     #    f_local = f - transits(t,p[0:5*npl],p[5*npl:5*npl+2],npl)
-        self.gp.set_parameter_vector(p)
-        return -self.gp.grad_log_likelihood(self.flux_no_planet_bin)
+    #    self.gp.set_parameter_vector(p)
+    #    return -self.gp.grad_log_likelihood(self.flux_no_planet_bin)
 
     def optimize(self):
         from scipy.optimize import minimize
@@ -113,46 +127,84 @@ class detrend():
         #Take the values from the optimisation
         self.gp.set_parameter_vector(self.result.x)
         #Recompute the correlation matrix
-        self.gp.compute(self.time_data,self.ferr_data)
+        self.gp.compute(self.time,self.ferr)
         #Predict the model for the original data set
-        pred, pred_var = self.gp.predict(self.flux_no_planet, self.time_data, return_var=True)
+        self.pred, self.pred_var = self.gp.predict(self.flux_no_planet, self.time, return_var=True)
         #Compute the detrended flux
-        self.flux_detrended = self.flux_data / pred
+        self.flux_detrended = self.flux / self.pred
 
-    def cut_transits(self,duration=6./24.):
-        T0 = self.planet_pars[0::5]
-        P  = self.planet_pars[1::5]
+        vectorsote = np.array([self.time,self.flux_detrended,self.ferr,self.flux,self.pred,self.flux_planet])
+        header = "Time  Detrended_flux  flux_error  flux  GP_model  planets_model"
+        fname = self.fname[:-4]+'_detrended.dat'
+        print("Saving {} file".format(fname))
+        np.savetxt(fname,vectorsote.T,header=header)
 
-        #Let us create a vector that includes all the data containing all the transits
-        nplanets = len(periods)
+    def cut_transits(self,durations=6./24.):
 
-        tr = [None]*nplanets
+        #Extract the ephemeris from the planet_pars attribute
+        if hasattr(self,'planet_pars'):
+            T0 = self.planet_pars[0::5]
+            P  = self.planet_pars[1::5]
+        else:
+            print("There are no planet parameters in the current class")
 
-        for o in range(0,nplanets):
-            phase = ((t-T0[o])%periods[o])/periods[o]
+
+        if durations.__class__ != list:
+            durations = [durations]*self.nplanets
+        else:
+            if len(durations) != self.nplanets:
+                durations = [max(durations)]*self.nplanets
+
+        #Create a list of lists to find the regions where the transits are for each planet
+        tr = [None]*self.nplanets
+
+        for o in range(0,self.nplanets):
+            phase = ((self.time-T0[o])%P[o])/P[o]
             phase[phase>0.5] -= 1
-            tr[o] = abs(phase) <= (2*durations[o])/periods[o]
+            tr[o] = abs(phase) <= (2*durations[o])/P[o]
 
+        #Let us combine all the data with a logical or
         indices = tr[0]
-        if nplanets > 0:
-            for o in range(1,nplanets):
+        if self.nplanets > 1:
+            for o in range(1,self.nplanets):
                 indices = np.logical_or(indices,tr[o])
 
-    def __str__(self):
-        return "This is a light curve"
+        #Now indices contains all the elements where there are transits
+        #Let us extract them
+        self.time_cut = self.time[indices]
+        self.flux_cut = self.flux[indices]
+        self.ferr_cut = self.ferr[indices]
 
-    def plot(self,fsx=8,fsy=8/1.618,fname='light_curve.pdf',jump=1,save=False,show=True,xlim=[None]):
+        vectorsote = np.array([self.time_cut,self.flux_cut,self.ferr_cut])
+        fname = self.fname[:-4]+'_cut.dat'
+        if hasattr(self,"flux_detrended"):
+            self.flux_detrended_cut = self.flux_detrended[indices]
+            vectorsote = np.array([self.time_cut,self.flux_detrended_cut,self.ferr_cut])
+            fname = self.fname[:-4]+'_detrended_cut.dat'
+
+        print("Saving {} file".format(fname))
+        np.savetxt(fname,vectorsote.T)
+
+
+    def plot(self,fsx=15,fsy=5,fname='light_curve.pdf',save=False,show=True,xlim=[None]):
         plt.figure(figsize=(fsx,fsy))
-        plt.plot(self.time[::jump],self.flux[::jump],'.',label='LC model')
         plt.xlabel('Time [days]')
         plt.ylabel('Normalised flux')
+        plt.plot(self.time,self.flux,'.',color="#bcbcbc",alpha=0.5,label='LC data')
+        if hasattr(self,'pred'):
+            plt.plot(self.time,self.pred*self.flux_planet,'-',color="#b30000",label='Model')
+        if hasattr(self,'flux_detrended'):
+            plt.plot(self.time,self.flux_detrended-6*np.std(self.flux),'.',color="#005ab3",alpha=0.5,label='LC detrended')
+            plt.plot(self.time,self.flux_planet-6*np.std(self.flux),'#ff7f00',label='Flat LC model')
+            plt.ylabel('Normalised flux + offset')
         plt.legend(loc=1,ncol=5,scatterpoints=1,numpoints=1,frameon=True)
+        plt.xlim(self.time.min(),self.time.max())
         try:
             plt.xlim(*xlim)
         except:
             pass
         if save:
-            plt.savefig(fname,bbox_inches='tight')
+            plt.savefig(fname,bbox_inches='tight',rasterized=True)
         if show:
             plt.show()
         plt.close()
