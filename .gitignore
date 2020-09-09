@@ -2,4 +2,8 @@
 .ipynb_checkpoints/
 __pycache__/
 Testint_PyTransit.ipynb
-
+*.dat
+*.pdf
+build/
+citlalicue.egg-info/
+dist/
