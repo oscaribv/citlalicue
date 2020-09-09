@@ -69,7 +69,7 @@ class detrend():
         self.flux_no_planet_bin = self.flux_bin / flux_bin
 
 
-    def gp(self,Kernel="Exp"):
+    def get_gp(self,Kernel="Exp"):
         import george
         from george import kernels
         if Kernel == "Matern32":

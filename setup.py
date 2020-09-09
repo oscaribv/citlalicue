@@ -17,7 +17,8 @@ setuptools.setup(
     "matplotlib",
     "scipy",
     "pytransit",
-    "george"],
+    "george",
+    "emcee"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
