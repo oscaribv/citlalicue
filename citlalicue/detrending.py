@@ -118,7 +118,10 @@ class detrend():
 
     def optimize(self,fit_planets=False):
         from scipy.optimize import minimize
+        import sys
         if fit_planets:
+            print("Not working yet!")
+            sys.exit()
             #Create guess vector including the planet parameters
             p = np.concatenate([self.planet_pars,self.ldc,self.gp.get_parameter_vector()])
             #optimise the whole likelihood optimising the planet model too
