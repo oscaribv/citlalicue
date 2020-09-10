@@ -98,29 +98,39 @@ class detrend():
         plt.show()
 
 
-    #p has to be a vector that contains the planet parameters + the hyper parameters
-    #def neg_ln_like(p,t,f,npl):
+    #p has to be a vector that contains the hyper parameters
     def neg_ln_like(self,p):
-      #The first 5*npl elements will be planet parameters
-     #The 5*npl + 1 and + 2 will be LDC
-     #The last elements will be hyperparameters
-        #    f_local = f - transits(t,p[0:5*npl],p[5*npl:5*npl+2],npl)
         self.gp.set_parameter_vector(p)
         return -self.gp.log_likelihood(self.flux_no_planet_bin)
 
-    #p has to be a vector that contains the planet parameters + the hyper parameters
-    #def grad_neg_ln_like(p,t,f,npl):
-    #def grad_neg_ln_like(p):
+    def grad_neg_ln_like(self,p):
+        self.gp.set_parameter_vector(p)
+        return -self.gp.grad_log_likelihood(self.flux_no_planet_bin)
+
+    def neg_ln_like_planet(self,p):
         #The first 5*npl elements will be planet parameters
         #The 5*npl + 1 and + 2 will be LDC
         #The last elements will be hyperparameters
-    #    f_local = f - transits(t,p[0:5*npl],p[5*npl:5*npl+2],npl)
-    #    self.gp.set_parameter_vector(p)
-    #    return -self.gp.grad_log_likelihood(self.flux_no_planet_bin)
+        npl = self.nplanets
+        self.add_transits(pars=p[0:5*npl],ldc=p[5*npl:5*npl+2])
+        self.gp.set_parameter_vector(p[5*npl+2:])
+        return -self.gp.log_likelihood(self.flux_no_planet_bin)
 
-    def optimize(self):
+    def optimize(self,fit_planets=False):
         from scipy.optimize import minimize
-        self.result = minimize(self.neg_ln_like,self.gp.get_parameter_vector())
+        if fit_planets:
+            #Create guess vector including the planet parameters
+            p = np.concatenate([self.planet_pars,self.ldc,self.gp.get_parameter_vector()])
+            #optimise the whole likelihood optimising the planet model too
+            result = minimize(self.neg_ln_like_planet,p)
+            #Recompute the transits
+            npl = self.nplanets
+            self.add_transits(result.x[:5*npl],result.x[5*npl:5*npl+2])
+            #Save the hyperparameters in self.result
+            self.result = result
+            self.result.x = result.x[5*npl+2]
+        else:
+            self.result = minimize(self.neg_ln_like,self.gp.get_parameter_vector(),jac=self.grad_neg_ln_like)
 
     def detrend(self):
         """detrend the original data set"""
@@ -139,7 +149,7 @@ class detrend():
         print("Saving {} file".format(fname))
         np.savetxt(fname,vectorsote.T,header=header)
 
-    def cut_transits(self,durations=6./24.):
+    def cut_transits(self,windows=6./24.):
 
         #Extract the ephemeris from the planet_pars attribute
         if hasattr(self,'planet_pars'):
@@ -149,11 +159,11 @@ class detrend():
             print("There are no planet parameters in the current class")
 
 
-        if durations.__class__ != list:
-            durations = [durations]*self.nplanets
+        if windows.__class__ != list:
+            windows = [windows]*self.nplanets
         else:
-            if len(durations) != self.nplanets:
-                durations = [max(durations)]*self.nplanets
+            if len(windows) != self.nplanets:
+                windows = [max(windows)]*self.nplanets
 
         #Create a list of lists to find the regions where the transits are for each planet
         tr = [None]*self.nplanets
@@ -161,7 +171,7 @@ class detrend():
         for o in range(0,self.nplanets):
             phase = ((self.time-T0[o])%P[o])/P[o]
             phase[phase>0.5] -= 1
-            tr[o] = abs(phase) <= (2*durations[o])/P[o]
+            tr[o] = abs(phase) <= (2*windows[o])/P[o]
 
         #Let us combine all the data with a logical or
         indices = tr[0]
