@@ -45,8 +45,8 @@ class detrend():
 
     def add_transits(self,pars,ldc):
         """
-        Add transits, so they can be removed from the detrending routines
-        pars -> [T0, P, a/R*, inclination, Rp/R*] x Number of planets
+        Add transits:
+        pars -> [T0, P, a/R*,b, Rp/R*] x Number of planets
         ldc  -> u1, u2
         """
 
@@ -65,8 +65,9 @@ class detrend():
         flux = 1
         flux_bin = 1
         for i in range(npl):
-            flux     = flux     * tm.evaluate(t0=pars[0+5*i], p=pars[1+5*i], a=pars[2+5*i], i=pars[3+5*i],k=pars[4+5*i], ldc=ldc)
-            flux_bin = flux_bin * tm_bin.evaluate(t0=pars[0+5*i], p=pars[1+5*i], a=pars[2+5*i], i=pars[3+5*i],k=pars[4+5*i], ldc=ldc)
+            incl = np.arccos(pars[3+5*i]/pars[2+5*i])
+            flux     = flux     * tm.evaluate(t0=pars[0+5*i], p=pars[1+5*i], a=pars[2+5*i], i=incl,k=pars[4+5*i], ldc=ldc)
+            flux_bin = flux_bin * tm_bin.evaluate(t0=pars[0+5*i], p=pars[1+5*i], a=pars[2+5*i], i=incl,k=pars[4+5*i], ldc=ldc)
 
         self.flux_planet = flux
         self.flux_planet_bin = flux_bin
@@ -75,6 +76,10 @@ class detrend():
 
 
     def get_gp(self,Kernel="Exp",amplitude=1e-3,metric=10.,gamma=10.,period=10.):
+        """
+        Citlalicue uses the kernels provided by george, now the options are "Exp", "Matern32", "Matern52", and Quasi-Periodic "QP"
+        User can modify hyper parameters amplitude, metric, gamma, period.
+        """
         import george
         from george import kernels
         if Kernel == "Matern32":
