@@ -14,7 +14,7 @@ class detrend():
     Ths class detrends light curves using GPs
     """
 
-    def __init__(self,fname,bin=10,err=0):
+    def __init__(self,fname,bin=10,err=0,normalise=False):
         """Load the light curve to be detrended
         The bin variables are used to speed up computation of the GP
         """
@@ -26,6 +26,11 @@ class detrend():
         else:
             self.time, self.flux = np.loadtxt(fname,unpack=True)
             self.ferr = np.array([err]*len(self.time))
+
+        if normalise:
+            mean = np.mean(self.flux)
+            self.flux = self.flux/mean
+            self.ferr = self.ferr/mean
 
         self.time_bin = self.time[::bin]
         self.flux_bin = self.flux[::bin]
@@ -69,15 +74,19 @@ class detrend():
         self.flux_no_planet_bin = self.flux_bin / flux_bin
 
 
-    def get_gp(self,Kernel="Exp"):
+    def get_gp(self,Kernel="Exp",amplitude=1e-3,metric=10.,gamma=10.,period=10.):
         import george
         from george import kernels
         if Kernel == "Matern32":
-            kernel = 0.1 * kernels.Matern32Kernel(10.)
+            kernel = amplitude * kernels.Matern32Kernel(metric)
         elif Kernel == "Matern52":
-            kernel = 0.1*kernels.Matern52Kernel(10.)
+            kernel = amplitude * kernels.Matern52Kernel(metric)
         elif Kernel == "Exp":
-            kernel = 0.1*kernels.ExpKernel(10.)
+            kernel = amplitude * kernels.ExpKernel(metric)
+        elif Kernel == "QP":
+            log_period = np.log(period)
+            kernel = amplitude * kernels.ExpKernel(metric)*kernels.ExpSine2Kernel(gamma,log_period)
+
 
         self.kernel = kernel
         #Compute the kernel with George
@@ -85,16 +94,18 @@ class detrend():
         #We compute the kernel using the binned data
         self.gp.compute(self.time_bin, self.ferr_bin)
 
-    def draw_sample(self):
-        sample_flux = self.gp.sample(self.time_bin)
-        plt.plot(self.time_bin,sample_flux)
+    def draw_samples(self,nsamples=1):
+        plt.figure(figsize=(15,5))
+        for i in range(nsamples):
+            sample_flux = self.gp.sample(self.time_bin)
+            plt.plot(self.time_bin,sample_flux,alpha=0.5)
         plt.show()
 
     def predict(self):
         pred, pred_var = self.gp.predict(self.flux_no_planet_bin, self.time_bin, return_var=True)
         plt.figure(figsize=(15,5))
-        plt.plot(self.time_bin,self.flux_bin,'ko',alpha=0.25)
-        plt.plot(self.time_bin,pred,'r')
+        plt.errorbar(self.time_bin,self.flux_bin,self.ferr_bin,fmt='o',color='k',alpha=0.25,zorder=1)
+        plt.plot(self.time_bin,pred,'r',zorder=2)
         plt.show()
 
 
@@ -218,6 +229,7 @@ class detrend():
             pass
         if save:
             plt.savefig(fname,bbox_inches='tight',rasterized=True)
+            plt.savefig(fname[:-3]+'png',bbox_inches='tight',rasterized=True,dpi=225)
         if show:
             plt.show()
         plt.close()
