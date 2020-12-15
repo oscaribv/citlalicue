@@ -14,7 +14,7 @@ class detrend():
     Ths class detrends light curves using GPs
     """
 
-    def __init__(self,fname,bin=10,err=0,normalise=False):
+    def __init__(self,fname,bin=10,err=0,normalise=True):
         """Load the light curve to be detrended
         The bin variables are used to speed up computation of the GP
         """
@@ -75,6 +75,50 @@ class detrend():
         self.flux_no_planet_bin = self.flux_bin / flux_bin
 
 
+    def mask_transits(self,windows=6./24.):
+        '''
+        Mask the transits for the binned vectors
+        So the GP will work only on out of transit data
+        '''
+
+        self.masked_transits = True
+
+        #Extract the ephemeris from the planet_pars attribute
+        if hasattr(self,'planet_pars'):
+            T0 = self.planet_pars[0::5]
+            P  = self.planet_pars[1::5]
+        else:
+            print("There are no planet parameters in the current class")
+
+
+        if windows.__class__ != list:
+            windows = [windows]*self.nplanets
+        else:
+            if len(windows) != self.nplanets:
+                windows = [max(windows)]*self.nplanets
+
+        #Create a list of lists to find the regions where the transits are for each planet
+        tr = [None]*self.nplanets
+
+        for o in range(0,self.nplanets):
+            phase = ((self.time_bin-T0[o])%P[o])/P[o]
+            phase[phase>0.5] -= 1
+            tr[o] = abs(phase) >= (2*windows[o])/P[o]
+
+        #Let us combine all the data with a logical or
+        indices = tr[0]
+        if self.nplanets > 1:
+            for o in range(1,self.nplanets):
+                indices = np.logical_or(indices,tr[o])
+
+        #Let us store the data with the planets masked out
+        self.time_bin = self.time_bin[indices]
+        self.flux_bin = self.flux_bin[indices]
+        self.ferr_bin = self.ferr_bin[indices]
+        self.flux_planet_bin = self.flux_planet_bin[indices]
+        self.flux_no_planet_bin = self.flux_no_planet_bin[indices]
+
+
     def get_gp(self,Kernel="Exp",amplitude=1e-3,metric=10.,gamma=10.,period=10.):
         """
         Citlalicue uses the kernels provided by george, now the options are "Exp", "Matern32", "Matern52", and Quasi-Periodic "QP"
@@ -91,7 +135,6 @@ class detrend():
         elif Kernel == "QP":
             log_period = np.log(period)
             kernel = amplitude * kernels.ExpKernel(metric)*kernels.ExpSine2Kernel(gamma,log_period)
-
 
         self.kernel = kernel
         #Compute the kernel with George
@@ -112,7 +155,6 @@ class detrend():
         plt.errorbar(self.time_bin,self.flux_bin,self.ferr_bin,fmt='o',color='k',alpha=0.25,zorder=1)
         plt.plot(self.time_bin,pred,'r',zorder=2)
         plt.show()
-
 
     #p has to be a vector that contains the hyper parameters
     def neg_ln_like(self,p):
@@ -151,17 +193,37 @@ class detrend():
         else:
             self.result = minimize(self.neg_ln_like,self.gp.get_parameter_vector(),jac=self.grad_neg_ln_like)
 
-    def detrend(self):
-        """detrend the original data set"""
+        #Add the result to our GP object
         #Take the values from the optimisation
         self.gp.set_parameter_vector(self.result.x)
-        #Recompute the correlation matrix
-        self.gp.compute(self.time,self.ferr)
-        #Predict the model for the original data set
-        self.pred, self.pred_var = self.gp.predict(self.flux_no_planet, self.time, return_var=True)
-        #Compute the detrended flux
-        self.flux_detrended = self.flux / self.pred
 
+    def detrend(self,method='interpolation'):
+        """detrend the original data set
+           There are two methods to compute the detrend light curve
+           method = gp, it computes the gp for the whole data set, this is computational demanding
+           method = interpolation, interpolates the GP using the GP from the binned data set, this is faster
+                    but you have to be careful.
+        """
+
+        if method == 'gp':
+            #Recompute the correlation matrix
+            self.gp.compute(self.time,self.ferr)
+            #Predict the model for the original data set
+            self.pred, self.pred_var = self.gp.predict(self.flux_no_planet, self.time, return_var=True)
+            #Compute the detrended flux
+            self.flux_detrended = self.flux / self.pred
+        elif method[0:2] == 'in':
+            from scipy.interpolate import interp1d
+            #Recompute the correlation matrix
+            self.gp.compute(self.time_bin,self.ferr_bin)
+            #Predict the model for the binned data set
+            pred, pred_var = self.gp.predict(self.flux_no_planet_bin, self.time_bin, return_var=True)
+            #Create the interpolation instance
+            f = interp1d(self.time_bin, pred, kind='cubic',fill_value="extrapolate")
+            self.pred = f(self.time)
+            self.flux_detrended = self.flux / self.pred
+
+        #Store the data in a file
         vectorsote = np.array([self.time,self.flux_detrended,self.ferr,self.flux,self.pred,self.flux_planet])
         header = "Time  Detrended_flux  flux_error  flux  GP_model  planets_model"
         fname = self.fname[:-4]+'_detrended.dat'
