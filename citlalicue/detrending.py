@@ -215,16 +215,18 @@ class detrend():
         np.savetxt(fname,vectorsote.T)
 
 
-    def plot(self,fsx=15,fsy=5,fname='light_curve.pdf',save=False,show=True,xlim=[None]):
+    def plot(self,fsx=15,fsy=5,fname='light_curve.pdf',save=False,show=True,xlim=[None],\
+             xlabel='Time [days]',ylabel='Normalised Flux',data_label='LC data',\
+             model_label='Model',detrended_data_label='LC detrended',flat_model_label='Flat LC model'):
         plt.figure(figsize=(fsx,fsy))
-        plt.xlabel('Time [days]')
-        plt.ylabel('Normalised flux')
-        plt.plot(self.time,self.flux,'.',color="#bcbcbc",alpha=0.5,label='LC data')
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.plot(self.time,self.flux,'.',color="#bcbcbc",alpha=0.5,label=data_label)
         if hasattr(self,'pred'):
-            plt.plot(self.time,self.pred*self.flux_planet,'-',color="#b30000",label='Model')
+            plt.plot(self.time,self.pred*self.flux_planet,'-',color="#b30000",label=model_label)
         if hasattr(self,'flux_detrended'):
-            plt.plot(self.time,self.flux_detrended-6*np.std(self.flux),'.',color="#005ab3",alpha=0.5,label='LC detrended')
-            plt.plot(self.time,self.flux_planet-6*np.std(self.flux),'#ff7f00',label='Flat LC model')
+            plt.plot(self.time,self.flux_detrended-6*np.std(self.flux),'.',color="#005ab3",alpha=0.5,label=detrended_data_label)
+            plt.plot(self.time,self.flux_planet-6*np.std(self.flux),'#ff7f00',label=flat_model_label)
             plt.ylabel('Normalised flux + offset')
         plt.legend(loc=1,ncol=5,scatterpoints=1,numpoints=1,frameon=True)
         plt.xlim(self.time.min(),self.time.max())
