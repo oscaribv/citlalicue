@@ -73,32 +73,39 @@ class light_curve:
     def add_spots(self,QP=[5e-5,0.5,30.,28.]):
         """
         This attribute add stellar variability using a Quasi-periodic Kernel
+        The activity is added using a george Kernel
         """
 
         if not hasattr(self,'flux_spots'):
 
-            x = np.arange(min(self.time)-1,max(self.time)+1,4./24.)
+            #x = np.arange(min(self.time)-1,max(self.time)+1,4./24.)
             #K = kernel_QP(x,x,QP)
             #Let us copute the covariance matrix for the GP
-            x1 = np.array(x)
-            x2 = np.array(x)
-            K = cdist(x1.reshape(len(x1),1),x2.reshape(len(x2),1))
+            #x1 = np.array(x)
+            #x2 = np.array(x)
+            #K = cdist(x1.reshape(len(x1),1),x2.reshape(len(x2),1))
             #QP[0] = A, QP[1] = le, QP[2] = lp, QP[3] = P
             A  = QP[0]
             le = QP[1]
             lp = QP[2]
             P  = QP[3]
-            K =  - (np.sin(np.pi*K/P))**2/2./lp**2 - K**2/2./le**2
-            K = A * np.exp(K)
+            #K =  - (np.sin(np.pi*K/P))**2/2./lp**2 - K**2/2./le**2
+            #K = A * np.exp(K)
 
             #Draw a sample from it
             #let us create the samples
-            ceros = np.zeros(len(x))
-            lc_dummy = multivariate_normal(ceros,K,size=1)
-            f = interp1d(x, lc_dummy, kind='cubic',fill_value="extrapolate")
-            light_curve = f(self.time) + 1
-            light_curve = light_curve[0]
-            self.flux_spots = light_curve
+            #ceros = np.zeros(len(x))
+            #lc_dummy = multivariate_normal(ceros,K,size=1)
+            #f = interp1d(x, lc_dummy, kind='cubic',fill_value="extrapolate")
+            #light_curve = f(self.time) + 1
+            #light_curve = light_curve[0]
+            #self.flux_spots = light_curve
+
+            from george import kernels, GP
+            k = A * kernels.ExpSine2Kernel(gamma=1./2/lp,log_period=np.log(P)) * \
+            kernels.ExpSquaredKernel(metric=le)
+            gp = GP(k)
+            self.flux_spots = gp.sample(self.time)
 
         self.flux = self.flux * self.flux_spots
 

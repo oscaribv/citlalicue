@@ -277,7 +277,7 @@ class detrend():
         np.savetxt(fname,vectorsote.T)
 
 
-    def plot(self,fsx=15,fsy=5,fname='light_curve.pdf',save=False,show=True,xlim=[None],\
+    def plot(self,fsx=15,fsy=5,fname='light_curve.pdf',save=False,show=True,xlim=[None],show_transit_positions=True,\
              xlabel='Time [days]',ylabel='Normalised Flux',data_label='LC data',\
              model_label='Model',detrended_data_label='LC detrended',flat_model_label='Flat LC model'):
         plt.figure(figsize=(fsx,fsy))
@@ -290,7 +290,17 @@ class detrend():
             plt.plot(self.time,self.flux_detrended-6*np.std(self.flux),'.',color="#005ab3",alpha=0.5,label=detrended_data_label)
             plt.plot(self.time,self.flux_planet-6*np.std(self.flux),'#ff7f00',label=flat_model_label)
             plt.ylabel('Normalised flux + offset')
-        plt.legend(loc=1,ncol=5,scatterpoints=1,numpoints=1,frameon=True)
+        if show_transit_positions:
+            if hasattr(self,'planet_pars'):
+                T0 = self.planet_pars[0::5]
+                P  = self.planet_pars[1::5]
+                for i in range(len(T0)):
+                    #where does the first transit happen?
+                    n = int((T0[i] - self.time.min())%P[i])
+                    t0s = np.arange(T0[i] - n*P[i],self.time.max(),P[i])
+                    ys = [max(self.flux)]*len(t0s)
+                    plt.plot(t0s,ys,'v')
+        plt.legend(loc=4,ncol=5,scatterpoints=1,numpoints=1,frameon=True)
         plt.xlim(self.time.min(),self.time.max())
         try:
             plt.xlim(*xlim)
