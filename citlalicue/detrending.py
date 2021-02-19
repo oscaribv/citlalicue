@@ -14,12 +14,13 @@ class detrend():
     Ths class detrends light curves using GPs
     """
 
-    def __init__(self,fname,bin=10,err=0,normalise=True):
+    def __init__(self,fname,bin=10,err=0,normalise=True,star_name='Star'):
         """Load the light curve to be detrended
         The bin variables are used to speed up computation of the GP
         """
 
         self.fname = fname
+        self.star_name = star_name
 
         if err == 0:
             self.time, self.flux, self.ferr = np.loadtxt(fname,unpack=True)
@@ -294,12 +295,13 @@ class detrend():
             if hasattr(self,'planet_pars'):
                 T0 = self.planet_pars[0::5]
                 P  = self.planet_pars[1::5]
+                plabel = ['b','c','d','e','f','g','h','i','j','k','l','m']
                 for i in range(len(T0)):
                     #where does the first transit happen?
                     n = int((T0[i] - self.time.min())%P[i])
                     t0s = np.arange(T0[i] - n*P[i],self.time.max(),P[i])
                     ys = [max(self.flux)]*len(t0s)
-                    plt.plot(t0s,ys,'v')
+                    plt.plot(t0s,ys,'v',label=self.star_name+' '+plabel[i],alpha=0.75)
         plt.legend(loc=4,ncol=5,scatterpoints=1,numpoints=1,frameon=True)
         plt.xlim(self.time.min(),self.time.max())
         try:
