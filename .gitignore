@@ -7,3 +7,4 @@ Testint_PyTransit.ipynb
 build/
 citlalicue.egg-info/
 dist/
+*png
