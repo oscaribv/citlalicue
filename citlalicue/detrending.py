@@ -267,7 +267,7 @@ class detrend():
         #Take the values from the optimisation
         self.gp.set_parameter_vector(self.result.x)
 
-    def sigma_clipping(self,sigma=3):
+    def sigma_clipping(self,sigma=5):
         """
         This method performs a sigma clipping algorithm respect to the current best model
         sigma is the float that indicates the tolerance for the rejection
@@ -311,6 +311,21 @@ class detrend():
             self.add_transits(self.planet_pars,self.ldc)
 
         return npoints
+
+    def iterative_optimize(self,sigma=5):
+        """
+        This method computes the optimisation iteratively using a sigma clipping algorithm
+        until there are no points eliminated
+        sigma is the float that indicates the tolerance for the rejection
+        """
+        np = 1
+        it = 1
+        while np > 0:
+            print("Iteration {}".format(it))
+            self.gp.compute(self.time_bin, self.ferr_bin)
+            self.optimize()
+            np = self.sigma_clipping(sigma)
+            it += 1
 
     def detrend(self,method='interpolation'):
         """detrend the original data set
