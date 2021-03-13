@@ -29,6 +29,8 @@ class detrend():
         self.fname = fname
         #Save the name of the star
         self.star_name = star_name
+        #Save the binning used
+        self.bin = bin
 
         #If the error of each datum is not given, then we expect to read it in the input file
         if err == 0:
@@ -265,6 +267,51 @@ class detrend():
         #Take the values from the optimisation
         self.gp.set_parameter_vector(self.result.x)
 
+    def sigma_clipping(self,sigma=3):
+        """
+        This method performs a sigma clipping algorithm respect to the current best model
+        sigma is the float that indicates the tolerance for the rejection
+        this method returns the number of points eliminated
+        """
+
+        #Recompute the correlation matrix
+        self.gp.compute(self.time_bin,self.ferr_bin)
+        #Predict the model for the binned data set
+        pred, pred_var = self.gp.predict(self.flux_no_planet_bin, self.time_bin, return_var=True)
+        #Create the interpolation instance
+        f = interp1d(self.time_bin, pred, kind='cubic',fill_value="extrapolate")
+        self.pred = f(self.time)
+        self.flux_detrended = self.flux / self.pred
+
+        #Compute the sigma_clipping for the input flux
+        #Create a vector with the resduals of the flux
+        residuals = self.flux_detrended - self.flux_planet
+        #Find the indices of the data where the flux is inside the sigma limit
+        indices = abs(residuals) < sigma * np.std(residuals)
+
+        #how many points did we eliminate?
+        npoints = len(self.time) - len(self.time[indices])
+        print("Eliminated {} points".format(npoints))
+        #plt.plot(self.time,self.flux,'ro')
+        #plt.plot(self.time[indices],self.flux[indices],'ko')
+        #plt.show()
+
+        if npoints > 0:
+
+            #Mask all the outliers using indices
+            self.time = self.time[indices]
+            self.flux = self.flux[indices]
+            self.ferr = self.ferr[indices]
+
+            #Recompute attributes with binned data each bin points
+            self.time_bin = self.time[::self.bin]
+            self.flux_bin = self.flux[::self.bin]
+            self.ferr_bin = self.ferr[::self.bin]
+
+            self.add_transits(self.planet_pars,self.ldc)
+
+        return npoints
+
     def detrend(self,method='interpolation'):
         """detrend the original data set
            There are two methods to compute the detrend light curve
@@ -373,7 +420,7 @@ class detrend():
                 plabel = ['b','c','d','e','f','g','h','i','j','k','l','m']
                 for i in range(len(T0)):
                     #where does the first transit happen?
-                    n = int((T0[i] - self.time.min())%P[i])
+                    n = int((T0[i] - self.time.min())%P[i]) + 100
                     t0s = np.arange(T0[i] - n*P[i],self.time.max(),P[i])
                     ys = [max(self.flux)]*len(t0s)
                     plt.plot(t0s,ys,'v',label=self.star_name+' '+plabel[i],alpha=0.75)
