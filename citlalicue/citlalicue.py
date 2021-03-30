@@ -128,7 +128,7 @@ class light_curve:
 
             self.flux_white_noise = self.flux[:]
             self.flux_white_noise = np.random.normal(self.flux_white_noise,std)
-            self.flux = self.flux_white_noise * self.flux
+            self.flux = self.flux_white_noise
 
 
     def remove_white_noise(self):
