@@ -413,7 +413,7 @@ class detrend():
         np.savetxt(fname,vectorsote.T)
 
 
-    def plot(self,fsx=15,fsy=5,fname='light_curve.pdf',save=False,show=True,xlim=[None],show_transit_positions=True,\
+    def plot(self,fsx=15,fsy=5,fname='light_curve.pdf',save=False,show=True,xlim=[None],ylim=[None],show_transit_positions=True,\
              xlabel='Time [days]',ylabel='Normalised Flux',data_label='LC data',\
              model_label='Model',detrended_data_label='LC detrended',flat_model_label='Flat LC model'):
         plt.figure(figsize=(fsx,fsy))
@@ -441,10 +441,8 @@ class detrend():
                     plt.plot(t0s,ys,'v',label=self.star_name+' '+plabel[i],alpha=0.75)
         plt.legend(loc=4,ncol=5,scatterpoints=1,numpoints=1,frameon=True)
         plt.xlim(self.time.min(),self.time.max())
-        try:
-            plt.xlim(*xlim)
-        except:
-            pass
+        if len(xlim) == 2: plt.xlim(*xlim)
+        if len(ylim) == 2: plt.ylim(*ylim)
         if save:
             plt.savefig(fname,bbox_inches='tight',rasterized=True)
             plt.savefig(fname[:-3]+'png',bbox_inches='tight',rasterized=True,dpi=225)
