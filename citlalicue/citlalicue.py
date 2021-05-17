@@ -8,7 +8,7 @@ from scipy.interpolate import interp1d
 from pytransit import QuadraticModel
 
 
-class light_curve:
+class citlali:
     """
     This class genereates light curve instances
     """
@@ -44,12 +44,17 @@ class light_curve:
 
         if not hasattr(self,'flux_transits'+planet_name):
 
-            t0 = self.params[0] #mid-transit time
-            p  = self.params[1] #orbital period
-            b  = self.params[2] #impact parameter
-            a  = self.params[3] #stellar density
-            rp = self.params[4] #scaled radius
-            ldc= [self.params[5],self.params[6]] #LDC
+            t0  = self.params[0] #mid-transit time
+            p   = self.params[1] #orbital period
+            b   = self.params[2] #impact parameter
+            rho = self.params[3] #stellar density in cgs
+            rp  = self.params[4] #scaled radius
+            ldc = [self.params[5],self.params[6]] #LDC
+
+            #Get the semi-major axis from the stellar density
+            G_SI = 6.67408e-11 #SI
+            rho = 1e3*rho #Go from cgs to SI
+            a  = (rho*(p*24*3600)**2*G_SI/3./np.pi)**(1./3.)
 
             #Get the inclination angle from the impact parameter
             inc = np.arccos(b/a)
@@ -78,34 +83,16 @@ class light_curve:
 
         if not hasattr(self,'flux_spots'):
 
-            #x = np.arange(min(self.time)-1,max(self.time)+1,4./24.)
-            #K = kernel_QP(x,x,QP)
-            #Let us copute the covariance matrix for the GP
-            #x1 = np.array(x)
-            #x2 = np.array(x)
-            #K = cdist(x1.reshape(len(x1),1),x2.reshape(len(x2),1))
-            #QP[0] = A, QP[1] = le, QP[2] = lp, QP[3] = P
             A  = QP[0]
             le = QP[1]
             lp = QP[2]
             P  = QP[3]
-            #K =  - (np.sin(np.pi*K/P))**2/2./lp**2 - K**2/2./le**2
-            #K = A * np.exp(K)
-
-            #Draw a sample from it
-            #let us create the samples
-            #ceros = np.zeros(len(x))
-            #lc_dummy = multivariate_normal(ceros,K,size=1)
-            #f = interp1d(x, lc_dummy, kind='cubic',fill_value="extrapolate")
-            #light_curve = f(self.time) + 1
-            #light_curve = light_curve[0]
-            #self.flux_spots = light_curve
 
             from george import kernels, GP
             k = A * kernels.ExpSine2Kernel(gamma=1./2/lp,log_period=np.log(P)) * \
             kernels.ExpSquaredKernel(metric=le)
             gp = GP(k)
-            self.flux_spots = gp.sample(self.time)
+            self.flux_spots = 1 + gp.sample(self.time)
 
         self.flux = self.flux * self.flux_spots
 
