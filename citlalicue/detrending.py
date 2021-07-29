@@ -4,9 +4,10 @@ from numpy.random import multivariate_normal
 from scipy.spatial.distance import cdist
 from scipy.interpolate import interp1d
 
-from citlalicue.citlalicue import light_curve
+from citlalicue.citlalicue import citlali
 #import QuadraticModel from pytransit
 from pytransit import QuadraticModel
+import pytransit.version
 
 
 class detrend():
@@ -48,7 +49,7 @@ class detrend():
 
         #Create attribute with a constinuous model betweeen the minimum and maximum times
         #this is helpful to plot between gaps
-        self.time_model = np.linspace(self.time.min(),self.time.max(),1000)
+        self.time_model = np.linspace(self.time.min(),self.time.max(),2500)
         self.flux_model = np.ones(len(self.time_model))
 
         #Create attributes with binned data each bin points
@@ -86,10 +87,22 @@ class detrend():
         npl = int(len(pars)/5)
         #Save the number of planets as an attribute
         self.nplanets = npl
-        #We compute the model with pytransit for self.time
+
+        #import pyaneti as pti
+        #for i in range(npl):
+        #    incl = np.arccos(pars[3+5*i]/pars[2+5*i])
+        #    ppars = [pars[0+5*i],pars[1+5*i],0,np.pi/2,incl,pars[2+5*i]]
+        #    rp =  pars[4+5*i]
+        #    self.flux_planet        *= pti.flux_tr_singleband_nobin(self.time,ppars,rp,ldc)
+        #    self.flux_planet_bin    *= pti.flux_tr_singleband_nobin(self.time_bin,ppars,rp,ldc)
+        #    self.flux_planet_model  *= pti.flux_tr_singleband_nobin(self.time_model,ppars,rp,ldc)
+
+
+
+       #We compute the model with pytransit for self.time
         tm = QuadraticModel()
         tm.set_data(self.time)
-        #We compute the model with pytransit for self.time_bin
+       #We compute the model with pytransit for self.time_bin
         tm_bin = QuadraticModel()
         tm_bin.set_data(self.time_bin)
         #We compute the model with pytransit for self.time_model
@@ -327,7 +340,7 @@ class detrend():
             np = self.sigma_clipping(sigma)
             it += 1
 
-    def detrend(self,method='interpolation'):
+    def detrend(self,method='gp'):
         """detrend the original data set
            There are two methods to compute the detrend light curve
            method = gp, it computes the gp for the whole data set, this is computational demanding
@@ -414,19 +427,20 @@ class detrend():
 
 
     def plot(self,fsx=15,fsy=5,fname='light_curve.pdf',save=False,show=True,xlim=[None],ylim=[None],show_transit_positions=True,\
-             xlabel='Time [days]',ylabel='Normalised Flux',data_label='LC data',\
-             model_label='Model',detrended_data_label='LC detrended',flat_model_label='Flat LC model'):
+             xlabel='Time [BJD - 2,457,000]',ylabel='Normalised Flux',data_label='LC data',\
+             model_label='LC Model',detrended_data_label='LC detrended',flat_model_label='Flat LC model'):
         plt.figure(figsize=(fsx,fsy))
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
-        plt.plot(self.time,self.flux,'.',color="#bcbcbc",alpha=0.5,label=data_label)
+        plt.plot(self.time,self.flux,'.',color="#bcbcbc",alpha=0.5,label=data_label,rasterized=True)
         if hasattr(self,'flux_model_var'):
             plt.plot(self.time_model,self.flux_model*self.flux_planet_model,'-',color="#b30000",label=model_label)
             plt.fill_between(self.time_model, self.flux_model*self.flux_planet_model - np.sqrt(self.flux_model_var),
-                             self.flux_model*self.flux_planet_model + np.sqrt(self.flux_model_var),color="#b30000", alpha=0.5)
+                             self.flux_model*self.flux_planet_model + np.sqrt(self.flux_model_var),color="#b30000", alpha=0.25)
         if hasattr(self,'flux_detrended'):
-            plt.plot(self.time,self.flux_detrended-6*np.std(self.flux),'.',color="#005ab3",alpha=0.5,label=detrended_data_label)
-            plt.plot(self.time_model,self.flux_planet_model-6*np.std(self.flux),'#ff7f00',label=flat_model_label)
+            plt.plot(self.time,self.flux_detrended-4*np.std(self.flux)-3*np.std(self.flux_detrended),
+                     '.',color="#005ab3",alpha=0.25,label=detrended_data_label,rasterized=True)
+            plt.plot(self.time_model,self.flux_planet_model-4*np.std(self.flux)-3*np.std(self.flux_detrended),'#ff7f00',label=flat_model_label)
             plt.ylabel('Normalised flux + offset')
         if show_transit_positions:
             if hasattr(self,'planet_pars'):
@@ -439,13 +453,13 @@ class detrend():
                     t0s = np.arange(T0[i] - n*P[i],self.time.max(),P[i])
                     ys = [max(self.flux)]*len(t0s)
                     plt.plot(t0s,ys,'v',label=self.star_name+' '+plabel[i],alpha=0.75)
-        plt.legend(loc=4,ncol=5,scatterpoints=1,numpoints=1,frameon=True)
+        plt.legend(loc=4,ncol=9,scatterpoints=1,numpoints=1,frameon=True)
         plt.xlim(self.time.min(),self.time.max())
         if len(xlim) == 2: plt.xlim(*xlim)
         if len(ylim) == 2: plt.ylim(*ylim)
         if save:
-            plt.savefig(fname,bbox_inches='tight',rasterized=True)
-            plt.savefig(fname[:-3]+'png',bbox_inches='tight',rasterized=True,dpi=225)
+            plt.savefig(fname,bbox_inches='tight',dpi=300)
+            plt.savefig(fname[:-3]+'png',bbox_inches='tight',dpi=300)
         if show:
             plt.show()
         plt.close()
