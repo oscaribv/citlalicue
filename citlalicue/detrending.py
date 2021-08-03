@@ -9,17 +9,41 @@ from citlalicue.citlalicue import citlali
 from pytransit import QuadraticModel
 import pytransit.version
 
+def bin_data(tvector,fvector,rvector,tbin=10./60/24.):
+    leftt = min(tvector)
+    right = leftt + tbin
+    xbined = []
+    fbined = []
+    rbined = []
+    while ( leftt < max(tvector) - tbin/2 ):
+        fdummy = []
+        rdummy = []
+        for i in range(0,len(tvector)):
+            if ( tvector[i] > leftt and tvector[i] < right ):
+                fdummy.append(fvector[i])
+                rdummy.append(rvector[i])
+        if len(fdummy) > 1:
+            fbined.append(np.mean(fdummy))
+            rbined.append(np.mean(rdummy))
+            #fbined.append(np.average(fdummy,weights=rdummy))
+            xbined.append(leftt + tbin/2.)
+        leftt = leftt + tbin
+        right = right + tbin
+    fbined = np.asarray(fbined)
+    rbined = np.asarray(rbined)
+    return np.array(xbined), np.array(fbined), np.array(rbined)
+
 
 class detrend():
     """
     Ths class detrends light curves using GPs
     """
 
-    def __init__(self,fname,bin=10,err=0,normalise=True,star_name='Star',delimiter=' '):
+    def __init__(self,fname,tbin=10,err=0,normalise=True,star_name='Star',delimiter=' '):
         """
         Load the light curve to be detrended
         fname contains the light curve data to detrends
-        bin is the number of data points used to bin the data and speed up computations
+        tbin is the time for the creation of the bins
         err is a user input error per each datum, it has to be in the same scale as the flux
         normalise, bool, if we want the light curve to be normalised
         star_name, name of the star to analyse, this is used for the plot labels
@@ -31,14 +55,20 @@ class detrend():
         #Save the name of the star
         self.star_name = star_name
         #Save the binning used
-        self.bin = bin
+        self.tbin = tbin
 
         #If the error of each datum is not given, then we expect to read it in the input file
         if err == 0:
-            self.time, self.flux, self.ferr = np.loadtxt(fname,unpack=True)
+            if delimiter == ' ':
+                self.time, self.flux, self.ferr = np.loadtxt(fname,unpack=True)
+            else:
+                self.time, self.flux, self.ferr = np.loadtxt(fname,unpack=True,delimiter=delimiter)
         else:
         #if the error is given, then let us only read time and flux, and store the ferr using the err value
-            self.time, self.flux = np.loadtxt(fname,unpack=True,usecols=(0,1))
+            if delimiter == ' ':
+                self.time, self.flux = np.loadtxt(fname,unpack=True,usecols=(0,1))
+            else:
+                self.time, self.flux = np.loadtxt(fname,unpack=True,usecols=(0,1),delimiter=delimiter)
             self.ferr = np.array([err]*len(self.time))
 
         #Normalise flux and errors
@@ -53,9 +83,7 @@ class detrend():
         self.flux_model = np.ones(len(self.time_model))
 
         #Create attributes with binned data each bin points
-        self.time_bin = self.time[::bin]
-        self.flux_bin = self.flux[::bin]
-        self.ferr_bin = self.ferr[::bin]
+        self.time_bin, self.flux_bin, self.ferr_bin = bin_data(self.time,self.flux,self.ferr,self.tbin)
 
         #Number of planets, initially we have 0
         self.nplanets = 0
@@ -130,6 +158,7 @@ class detrend():
 
         #Set an attribute saying that we have masked the transits
         self.masked_transits = True
+        self.mask_window = windows
 
         #Extract the ephemeris from the planet_pars attribute
         if hasattr(self,'planet_pars'):
@@ -158,14 +187,14 @@ class detrend():
             #Transform phase to a vector with values between -0.5 and 0.5
             phase[phase>0.5] -= 1
             #Save as True all the elemets where the phase of the current planet orbit is larger than the window
-            tr[o] = abs(phase) >= (windows[o])/P[o]
+            tr[o] = abs(phase) > windows[o]/P[o]
             #Each tr is a list that is True for all the elemets where we do not have transits for planet o
 
         #Let us combine all the trs with a logical or
         indices = tr[0]
         if self.nplanets > 1:
             for o in range(1,self.nplanets):
-                indices = np.logical_or(indices,tr[o])
+                indices = np.logical_and(indices,tr[o])
         #Now we have a list indices that is True for all the positions where there are any transit of any planet
 
         #Time to masks the transits using indices
@@ -298,7 +327,7 @@ class detrend():
 
         #Compute the sigma_clipping for the input flux
         #Create a vector with the resduals of the flux
-        residuals = self.flux_detrended - self.flux_planet
+        residuals = self.flux_detrended  - self.flux_planet
         #Find the indices of the data where the flux is inside the sigma limit
         indices = abs(residuals) < sigma * np.std(residuals)
 
@@ -317,11 +346,11 @@ class detrend():
             self.ferr = self.ferr[indices]
 
             #Recompute attributes with binned data each bin points
-            self.time_bin = self.time[::self.bin]
-            self.flux_bin = self.flux[::self.bin]
-            self.ferr_bin = self.ferr[::self.bin]
+            self.time_bin, self.flux_bin, self.ferr_bin = bin_data(self.time,self.flux,self.ferr,self.tbin)
 
             self.add_transits(self.planet_pars,self.ldc)
+            if self.masked_transits:
+                self.mask_transits(self.mask_window)
 
         return npoints
 
@@ -340,7 +369,7 @@ class detrend():
             np = self.sigma_clipping(sigma)
             it += 1
 
-    def detrend(self,method='gp'):
+    def detrend(self,method='interpolation'):
         """detrend the original data set
            There are two methods to compute the detrend light curve
            method = gp, it computes the gp for the whole data set, this is computational demanding
@@ -356,7 +385,7 @@ class detrend():
             #Compute the detrended flux
             self.flux_detrended = self.flux / self.pred
             #Predict the model to be plotted
-            self.flux_model, self.flux_model_var = self.gp.predict(self.flux_no_planet, self.time_model, return_var=True)
+            self.flux_model_gp, self.flux_model_gp_var = self.gp.predict(self.flux_no_planet, self.time, return_var=True)
         elif method[0:2] == 'in':
             from scipy.interpolate import interp1d
             #Recompute the correlation matrix
@@ -368,9 +397,9 @@ class detrend():
             self.pred = f(self.time)
             self.flux_detrended = self.flux / self.pred
             #Compute the models also with interpolations
-            self.flux_model = f(self.time_model)
+            self.flux_model_gp = f(self.time)
             f = interp1d(self.time_bin, pred_var, kind='cubic',fill_value="extrapolate")
-            self.flux_model_var = f(self.time_model)
+            self.flux_model_gp_var = f(self.time)
 
         #Store the data in a file
         vectorsote = np.array([self.time,self.flux_detrended,self.ferr,self.flux,self.pred,self.flux_planet])
@@ -427,20 +456,20 @@ class detrend():
 
 
     def plot(self,fsx=15,fsy=5,fname='light_curve.pdf',save=False,show=True,xlim=[None],ylim=[None],show_transit_positions=True,\
-             xlabel='Time [BJD - 2,457,000]',ylabel='Normalised Flux',data_label='LC data',\
-             model_label='LC Model',detrended_data_label='LC detrended',flat_model_label='Flat LC model'):
+             xlabel='Time [BJD - 2,457,000]',ylabel='Normalised Flux',data_label='LC data',tr_colors = ['#006341','#CE1126', 'b', 'k', 'y', '#ffbf00', '#ff1493'],\
+             model_label='Out-of-transit Model',detrended_data_label='LC detrended',flat_model_label='Flat LC model'):
         plt.figure(figsize=(fsx,fsy))
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
         plt.plot(self.time,self.flux,'.',color="#bcbcbc",alpha=0.5,label=data_label,rasterized=True)
-        if hasattr(self,'flux_model_var'):
-            plt.plot(self.time_model,self.flux_model*self.flux_planet_model,'-',color="#b30000",label=model_label)
-            plt.fill_between(self.time_model, self.flux_model*self.flux_planet_model - np.sqrt(self.flux_model_var),
-                             self.flux_model*self.flux_planet_model + np.sqrt(self.flux_model_var),color="#b30000", alpha=0.25)
+        if hasattr(self,'flux_model_gp'):
+            plt.plot(self.time,self.flux_model_gp,'-',color="#b30000",label=model_label)
+            #plt.fill_between(self.time, self.flux_model_gp - np.sqrt(self.flux_model_gp_var),
+            #                 self.flux_model_gp + np.sqrt(self.flux_model_gp_var),color="#b30000", alpha=0.25)
         if hasattr(self,'flux_detrended'):
             plt.plot(self.time,self.flux_detrended-4*np.std(self.flux)-3*np.std(self.flux_detrended),
-                     '.',color="#005ab3",alpha=0.25,label=detrended_data_label,rasterized=True)
-            plt.plot(self.time_model,self.flux_planet_model-4*np.std(self.flux)-3*np.std(self.flux_detrended),'#ff7f00',label=flat_model_label)
+                     '.',color="#005ab3",alpha=0.5,label=detrended_data_label,rasterized=True)
+            plt.plot(self.time_model,self.flux_planet_model-4*np.std(self.flux)-3*np.std(self.flux_detrended),color='#ff7f00',label=flat_model_label)
             plt.ylabel('Normalised flux + offset')
         if show_transit_positions:
             if hasattr(self,'planet_pars'):
@@ -452,7 +481,7 @@ class detrend():
                     n = int((T0[i] - self.time.min())%P[i]) + 100
                     t0s = np.arange(T0[i] - n*P[i],self.time.max(),P[i])
                     ys = [max(self.flux)]*len(t0s)
-                    plt.plot(t0s,ys,'v',label=self.star_name+' '+plabel[i],alpha=0.75)
+                    plt.plot(t0s,ys,'v',label=self.star_name+' '+plabel[i],alpha=0.75,color=tr_colors[i])
         plt.legend(loc=4,ncol=9,scatterpoints=1,numpoints=1,frameon=True)
         plt.xlim(self.time.min(),self.time.max())
         if len(xlim) == 2: plt.xlim(*xlim)
