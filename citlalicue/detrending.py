@@ -24,7 +24,7 @@ def bin_data(tvector,fvector,rvector,tbin=10./60/24.):
                 rdummy.append(rvector[i])
         if len(fdummy) > 1:
             fbined.append(np.mean(fdummy))
-            rbined.append(np.mean(rdummy))
+            rbined.append(np.mean(rdummy)/np.sqrt(len(rdummy)))
             #fbined.append(np.average(fdummy,weights=rdummy))
             xbined.append(leftt + tbin/2.)
         leftt = leftt + tbin
@@ -88,6 +88,7 @@ class detrend():
         #Number of planets, initially we have 0
         self.nplanets = 0
         self.masked_transits = False
+        self.fit_planets = False
 
     def add_transits(self,pars,ldc):
         """
@@ -287,6 +288,7 @@ class detrend():
         """
         from scipy.optimize import minimize
         import sys
+        self.fit_planets = fit_planets
         if fit_planets:
             if self.masked_transits:
                 print("You cannot use fit_planets=True if you have masked the transits")
@@ -469,7 +471,8 @@ class detrend():
         if hasattr(self,'flux_detrended'):
             plt.plot(self.time,self.flux_detrended-4*np.std(self.flux)-3*np.std(self.flux_detrended),
                      '.',color="#005ab3",alpha=0.5,label=detrended_data_label,rasterized=True)
-            plt.plot(self.time_model,self.flux_planet_model-4*np.std(self.flux)-3*np.std(self.flux_detrended),color='#ff7f00',label=flat_model_label)
+            if self.fit_planets:
+                plt.plot(self.time_model,self.flux_planet_model-4*np.std(self.flux)-3*np.std(self.flux_detrended),color='#ff7f00',label=flat_model_label)
             plt.ylabel('Normalised flux + offset')
         if show_transit_positions:
             if hasattr(self,'planet_pars'):
