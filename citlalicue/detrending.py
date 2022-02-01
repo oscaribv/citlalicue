@@ -458,7 +458,8 @@ class detrend():
 
 
     def plot(self,fsx=15,fsy=5,fname='light_curve.pdf',save=False,show=True,xlim=[None],ylim=[None],show_transit_positions=True,\
-             xlabel='Time [BJD - 2,457,000]',ylabel='Normalised Flux',data_label='LC data',tr_colors = ['#006341','#CE1126', 'b', 'k', 'y', '#ffbf00', '#ff1493'],\
+             xlabel='Time [BJD - 2,457,000]',ylabel='Normalised Flux',data_label='LC data',plot_transit_model=False,\
+             tr_colors = ['#006341','#CE1126', 'b', 'k', 'y', '#ffbf00', '#ff1493'],\
              model_label='Out-of-transit Model',detrended_data_label='LC detrended',flat_model_label='Flat LC model'):
         plt.figure(figsize=(fsx,fsy))
         plt.xlabel(xlabel)
@@ -471,7 +472,7 @@ class detrend():
         if hasattr(self,'flux_detrended'):
             plt.plot(self.time,self.flux_detrended-4*np.std(self.flux)-3*np.std(self.flux_detrended),
                      '.',color="#005ab3",alpha=0.5,label=detrended_data_label,rasterized=True)
-            if self.fit_planets:
+            if self.fit_planets or plot_transit_model:
                 plt.plot(self.time_model,self.flux_planet_model-4*np.std(self.flux)-3*np.std(self.flux_detrended),color='#ff7f00',label=flat_model_label)
             plt.ylabel('Normalised flux + offset')
         if show_transit_positions:
