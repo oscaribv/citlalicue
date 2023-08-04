@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="citlalicue",
-    version="0.7.0",
+    version="0.7.1",
     author="Oscar Barragán",
     author_email="oscaribv@gmail.com",
     description="Create stellar light curves!",
@@ -18,7 +18,10 @@ setuptools.setup(
     "scipy",
     "pytransit",
     "george",
-    "emcee"],
+    "emcee",
+    "celerite",
+    "corner",
+    "lightkurve"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
